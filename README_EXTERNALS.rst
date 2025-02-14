@@ -1,6 +1,11 @@
 Obtaining the full model code and associated scripting infrastructure
 =====================================================================
 
+[!CAUTION]
+This is deprecated and will be replaced with git submodules. See
+https://github.com/ESCOMP/CTSM/pull/2443
+
+
 CTSM is released via GitHub. You will need some familiarity with git in order
 to modify the code and commit these changes. However, to simply checkout and run the
 code, no git knowledge is required other than what is documented in the following steps.
@@ -30,10 +35,9 @@ More details on checkout_externals
 
 The file **Externals.cfg** in your top-level CTSM directory tells
 **checkout_externals** which tag/branch of each component should be
-brought in to generate your sandbox. (This file serves the same purpose
-as SVN_EXTERNAL_DIRECTORIES when CLM was in a subversion repository.)
+brought in to generate your sandbox. **Externals_CLM.cfg** is used similarly to point to the correct version of FATES (and possibly other CTSM-specific externals in the future); the below instructions referring to **Externals.cfg** also apply to modifying **Externals_CLM.cfg**.
 
-NOTE: Just like svn externals, checkout_externals will always attempt
+NOTE: checkout_externals will always attempt
 to make the working copy exactly match the externals description. If
 you manually modify an external without updating Externals.cfg, e.g. switch
 to a different tag, then rerunning checkout_externals will switch you
@@ -96,7 +100,7 @@ example below)::
   tag = cime5.4.0-alpha.20
   required = True
 
-Each entry specifies either a tag or a branch. To point to a new tag:
+Each entry specifies either a tag, a hash or a branch. To point to a new tag:
 
 #. Modify the relevant entry/entries in **Externals.cfg** (e.g., changing
    ``cime5.4.0-alpha.20`` to ``cime5.4.0-alpha.21`` above)
@@ -104,6 +108,10 @@ Each entry specifies either a tag or a branch. To point to a new tag:
 #. Checkout the new component(s)::
 
      ./manage_externals/checkout_externals
+
+To point to a hash, the process is the same, except also change ``tag = ...`` to ``hash = ...``.
+
+To point to a branch, use ``branch = ...``. Pointing to a branch means that, each time you run ``manage_externals/checkout_externals`` you will get the current latest version of that branch. This can be convenient for in-progress development work, but should not be used when you need a stable version for scientific simulations. There are a number of gotchas with this workflow, so in general you should default to pointing to fixed hashes. (For CTSM master, we require a fixed hash or, usually, a tag.)
 
 Keep in mind that changing individual components from a tag may result
 in an invalid model (won't compile, won't run, not scientifically

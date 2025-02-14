@@ -11,10 +11,10 @@ module subgridAveMod
   use shr_log_mod   , only : errMsg => shr_log_errMsg
   use column_varcon , only : icol_roof, icol_sunwall, icol_shadewall
   use column_varcon , only : icol_road_perv , icol_road_imperv
-  use clm_varcon    , only : grlnd, nameg, namel, namec, namep,spval 
+  use clm_varcon    , only : spval
   use clm_varctl    , only : iulog
   use abortutils    , only : endrun
-  use decompMod     , only : bounds_type
+  use decompMod     , only : bounds_type, subgrid_level_gridcell, subgrid_level_landunit, subgrid_level_column
   use LandunitType  , only : lun                
   use ColumnType    , only : col                
   use PatchType     , only : patch                
@@ -22,6 +22,7 @@ module subgridAveMod
   ! !PUBLIC TYPES:
   implicit none
   save
+  private    ! By default make everything private
   !
   ! !PUBLIC MEMBER FUNCTIONS:
   public :: p2c   ! Perform an average patches to columns
@@ -100,6 +101,70 @@ module subgridAveMod
 contains
 
   !-----------------------------------------------------------------------
+  subroutine set_c2l_scale (bounds, c2l_scale_type, scale_c2l)
+    !
+    ! !DESCRIPTION:
+    ! Set scale_c2l for different c2l_scale_type values
+    !
+    ! !ARGUMENTS:
+    type(bounds_type), intent(in) :: bounds        
+    character(len=*), intent(in) :: c2l_scale_type ! scale factor type for averaging (see note at top of module)
+    real(r8), intent(out) :: scale_c2l(bounds%begc:bounds%endc)     ! scale factor for column->landunit mapping
+
+    !
+    ! !LOCAL VARIABLES:
+    integer  :: c,l                       ! indices
+    !------------------------------------------------------------------------
+
+    ! Enforce expected array sizes
+    SHR_ASSERT_ALL_FL((ubound(scale_c2l) == (/bounds%endc/)), sourcefile, __LINE__)
+
+    if (c2l_scale_type == 'unity') then
+       do c = bounds%begc,bounds%endc
+          scale_c2l(c) = 1.0_r8
+       end do
+    else if (c2l_scale_type == 'urbanf') then
+       do c = bounds%begc,bounds%endc
+          l = col%landunit(c) 
+          if (lun%urbpoi(l)) then
+             if (col%itype(c) == icol_sunwall) then
+                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
+             else if (col%itype(c) == icol_shadewall) then
+                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
+             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
+                scale_c2l(c) = 3.0_r8
+             else if (col%itype(c) == icol_roof) then
+                scale_c2l(c) = 1.0_r8
+             end if
+          else
+             scale_c2l(c) = 1.0_r8
+          end if
+       end do
+    else if (c2l_scale_type == 'urbans') then
+       do c = bounds%begc,bounds%endc
+          l = col%landunit(c) 
+          if (lun%urbpoi(l)) then
+             if (col%itype(c) == icol_sunwall) then
+                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
+             else if (col%itype(c) == icol_shadewall) then
+                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
+             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
+                scale_c2l(c) = 3.0 / (2.*lun%canyon_hwr(l) + 1.)
+             else if (col%itype(c) == icol_roof) then
+                scale_c2l(c) = 1.0_r8
+             end if
+          else
+             scale_c2l(c) = 1.0_r8
+          end if
+       end do
+    else
+       write(iulog,*)'set_c2l_scale: scale type ',c2l_scale_type,' not supported'
+       call endrun(msg=errMsg(sourcefile, __LINE__))
+    end if
+
+  end subroutine set_c2l_scale
+    
+  !-----------------------------------------------------------------------
   subroutine p2c_1d (bounds, parr, carr, p2c_scale_type)
     !
     ! !DESCRIPTION:
@@ -120,8 +185,8 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(parr) == (/bounds%endp/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(carr) == (/bounds%endc/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(parr) == (/bounds%endp/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(carr) == (/bounds%endc/)), sourcefile, __LINE__)
 
     if (p2c_scale_type == 'unity') then
        do p = bounds%begp,bounds%endp
@@ -155,7 +220,7 @@ contains
     end do
     if (found) then
        write(iulog,*)'p2c_1d error: sumwt is greater than 1.0'
-       call endrun(decomp_index=index, clmlevel=namec, msg=errMsg(sourcefile, __LINE__))
+       call endrun(subgrid_index=index, subgrid_level=subgrid_level_column, msg=errMsg(sourcefile, __LINE__))
     end if
 
   end subroutine p2c_1d
@@ -182,8 +247,8 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(parr) == (/bounds%endp, num2d/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(carr) == (/bounds%endc, num2d/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(parr) == (/bounds%endp, num2d/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(carr) == (/bounds%endc, num2d/)), sourcefile, __LINE__)
 
     if (p2c_scale_type == 'unity') then
        do p = bounds%begp,bounds%endp
@@ -218,7 +283,7 @@ contains
        end do
        if (found) then
           write(iulog,*)'p2c_2d error: sumwt is greater than 1.0 at c= ',index,' lev= ',j
-          call endrun(decomp_index=index, clmlevel=namec, msg=errMsg(sourcefile, __LINE__))
+          call endrun(subgrid_index=index, subgrid_level=subgrid_level_column, msg=errMsg(sourcefile, __LINE__))
        end if
     end do 
   end subroutine p2c_2d
@@ -241,8 +306,8 @@ contains
     !-----------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(patcharr) == (/bounds%endp/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(colarr) == (/bounds%endc/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(patcharr) == (/bounds%endp/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(colarr) == (/bounds%endc/)), sourcefile, __LINE__)
 
     do fc = 1,numfc
        c = filterc(fc)
@@ -306,51 +371,10 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(parr) == (/bounds%endp/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(larr) == (/bounds%endl/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(parr) == (/bounds%endp/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(larr) == (/bounds%endl/)), sourcefile, __LINE__)
 
-    if (c2l_scale_type == 'unity') then
-       do c = bounds%begc,bounds%endc
-          scale_c2l(c) = 1.0_r8
-       end do
-    else if (c2l_scale_type == 'urbanf') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0_r8
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else if (c2l_scale_type == 'urbans') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0 / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else
-       write(iulog,*)'p2l_1d error: scale type ',c2l_scale_type,' not supported'
-       call endrun(msg=errMsg(sourcefile, __LINE__))
-    end if
+    call set_c2l_scale (bounds, c2l_scale_type, scale_c2l)    
 
     if (p2c_scale_type == 'unity') then
        do p = bounds%begp,bounds%endp
@@ -385,7 +409,7 @@ contains
     end do
     if (found) then
        write(iulog,*)'p2l_1d error: sumwt is greater than 1.0 at l= ',index
-       call endrun(decomp_index=index, clmlevel=namel, msg=errMsg(sourcefile, __LINE__))
+       call endrun(subgrid_index=index, subgrid_level=subgrid_level_landunit, msg=errMsg(sourcefile, __LINE__))
     end if
 
   end subroutine p2l_1d
@@ -414,51 +438,10 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(parr) == (/bounds%endp, num2d/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(larr) == (/bounds%endl, num2d/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(parr) == (/bounds%endp, num2d/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(larr) == (/bounds%endl, num2d/)), sourcefile, __LINE__)
 
-    if (c2l_scale_type == 'unity') then
-       do c = bounds%begc,bounds%endc
-          scale_c2l(c) = 1.0_r8
-       end do
-    else if (c2l_scale_type == 'urbanf') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0_r8
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else if (c2l_scale_type == 'urbans') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0 / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else
-       write(iulog,*)'p2l_2d error: scale type ',c2l_scale_type,' not supported'
-       call endrun(msg=errMsg(sourcefile, __LINE__))
-    end if
+    call set_c2l_scale (bounds, c2l_scale_type, scale_c2l)    
 
     if (p2c_scale_type == 'unity') then
        do p = bounds%begp,bounds%endp
@@ -494,7 +477,7 @@ contains
        end do
        if (found) then
           write(iulog,*)'p2l_2d error: sumwt is greater than 1.0 at l= ',index,' j= ',j
-          call endrun(decomp_index=index, clmlevel=namel, msg=errMsg(sourcefile, __LINE__))
+          call endrun(subgrid_index=index, subgrid_level=subgrid_level_landunit, msg=errMsg(sourcefile, __LINE__))
        end if
     end do
 
@@ -525,54 +508,13 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(parr) == (/bounds%endp/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(garr) == (/bounds%endg/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(parr) == (/bounds%endp/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(garr) == (/bounds%endg/)), sourcefile, __LINE__)
 
     call build_scale_l2g(bounds, l2g_scale_type, &
          scale_l2g(bounds%begl:bounds%endl))
 
-    if (c2l_scale_type == 'unity') then
-       do c = bounds%begc,bounds%endc
-          scale_c2l(c) = 1.0_r8
-       end do
-    else if (c2l_scale_type == 'urbanf') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0_r8
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else if (c2l_scale_type == 'urbans') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0 / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else
-       write(iulog,*)'p2g_1d error: scale type ',c2l_scale_type,' not supported'
-       call endrun(msg=errMsg(sourcefile, __LINE__))
-    end if
+    call set_c2l_scale (bounds, c2l_scale_type, scale_c2l)    
 
     if (p2c_scale_type == 'unity') then
        do p = bounds%begp,bounds%endp
@@ -608,7 +550,7 @@ contains
     end do
     if (found) then
        write(iulog,*)'p2g_1d error: sumwt is greater than 1.0 at g= ',index
-       call endrun(decomp_index=index, clmlevel=nameg, msg=errMsg(sourcefile, __LINE__))
+       call endrun(subgrid_index=index, subgrid_level=subgrid_level_gridcell, msg=errMsg(sourcefile, __LINE__))
     end if
 
   end subroutine p2g_1d
@@ -641,54 +583,13 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(parr) == (/bounds%endp, num2d/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(garr) == (/bounds%endg, num2d/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(parr) == (/bounds%endp, num2d/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(garr) == (/bounds%endg, num2d/)), sourcefile, __LINE__)
 
     call build_scale_l2g(bounds, l2g_scale_type, &
          scale_l2g(bounds%begl:bounds%endl))
 
-    if (c2l_scale_type == 'unity') then
-       do c = bounds%begc,bounds%endc
-          scale_c2l(c) = 1.0_r8
-       end do
-    else if (c2l_scale_type == 'urbanf') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0_r8
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else if (c2l_scale_type == 'urbans') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0 / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else
-       write(iulog,*)'p2g_2d error: scale type ',c2l_scale_type,' not supported'
-       call endrun(msg=errMsg(sourcefile, __LINE__))
-    end if
+    call set_c2l_scale (bounds, c2l_scale_type, scale_c2l)    
 
     if (p2c_scale_type == 'unity') then
        do p = bounds%begp,bounds%endp
@@ -725,14 +626,14 @@ contains
        end do
        if (found) then
           write(iulog,*)'p2g_2d error: sumwt gt 1.0 at g/sumwt = ',index,sumwt(index)
-          call endrun(decomp_index=index, clmlevel=nameg, msg=errMsg(sourcefile, __LINE__))
+          call endrun(subgrid_index=index, subgrid_level=subgrid_level_gridcell, msg=errMsg(sourcefile, __LINE__))
        end if
     end do
 
   end subroutine p2g_2d
 
   !-----------------------------------------------------------------------
-  subroutine c2l_1d (bounds, carr, larr, c2l_scale_type)
+  subroutine c2l_1d (bounds, carr, larr, c2l_scale_type, include_inactive)
     !
     ! !DESCRIPTION:
     ! Perfrom subgrid-average from columns to landunits
@@ -743,8 +644,16 @@ contains
     real(r8), intent(in)  :: carr( bounds%begc: )  ! input column array
     real(r8), intent(out) :: larr( bounds%begl: )  ! output landunit array
     character(len=*), intent(in) :: c2l_scale_type ! scale factor type for averaging (see note at top of module)
+
+    ! If include_inactive is present and .true., then include inactive as well as active
+    ! columns in the averages. The purpose of this is to produce valid landunit-level
+    ! output for inactive landunits. This should only be set if carr has no NaN values,
+    ! even for inactive columns.
+    logical, intent(in), optional :: include_inactive
+
     !
     ! !LOCAL VARIABLES:
+    logical  :: l_include_inactive
     integer  :: c,l,index                       ! indices
     logical  :: found                              ! temporary for error check
     real(r8) :: scale_c2l(bounds%begc:bounds%endc) ! scale factor for column->landunit mapping
@@ -752,56 +661,21 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(carr) == (/bounds%endc/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(larr) == (/bounds%endl/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(carr) == (/bounds%endc/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(larr) == (/bounds%endl/)), sourcefile, __LINE__)
 
-    if (c2l_scale_type == 'unity') then
-       do c = bounds%begc,bounds%endc
-          scale_c2l(c) = 1.0_r8
-       end do
-    else if (c2l_scale_type == 'urbanf') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0_r8
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else if (c2l_scale_type == 'urbans') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0 / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
+    if (present(include_inactive)) then
+       l_include_inactive = include_inactive
     else
-       write(iulog,*)'c2l_1d error: scale type ',c2l_scale_type,' not supported'
-       call endrun(msg=errMsg(sourcefile, __LINE__))
+       l_include_inactive = .false.
     end if
+
+    call set_c2l_scale (bounds, c2l_scale_type, scale_c2l)    
 
     larr(bounds%begl : bounds%endl) = spval
     sumwt(bounds%begl : bounds%endl) = 0._r8
     do c = bounds%begc,bounds%endc
-       if (col%active(c) .and. col%wtlunit(c) /= 0._r8) then
+       if ((col%active(c) .or. l_include_inactive) .and. col%wtlunit(c) /= 0._r8) then
           if (carr(c) /= spval .and. scale_c2l(c) /= spval) then
              l = col%landunit(c)
              if (sumwt(l) == 0._r8) larr(l) = 0._r8
@@ -821,7 +695,7 @@ contains
     end do
     if (found) then
        write(iulog,*)'c2l_1d error: sumwt is greater than 1.0 at l= ',index
-       call endrun(decomp_index=index, clmlevel=namel, msg=errMsg(sourcefile, __LINE__))
+       call endrun(subgrid_index=index, subgrid_level=subgrid_level_landunit, msg=errMsg(sourcefile, __LINE__))
     end if
 
   end subroutine c2l_1d
@@ -848,51 +722,10 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(carr) == (/bounds%endc, num2d/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(larr) == (/bounds%endl, num2d/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(carr) == (/bounds%endc, num2d/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(larr) == (/bounds%endl, num2d/)), sourcefile, __LINE__)
 
-    if (c2l_scale_type == 'unity') then
-       do c = bounds%begc,bounds%endc
-          scale_c2l(c) = 1.0_r8
-       end do
-    else if (c2l_scale_type == 'urbanf') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0_r8
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else if (c2l_scale_type == 'urbans') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0 / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else
-       write(iulog,*)'c2l_2d error: scale type ',c2l_scale_type,' not supported'
-       call endrun(msg=errMsg(sourcefile, __LINE__))
-    end if
+    call set_c2l_scale (bounds, c2l_scale_type, scale_c2l)    
 
     larr(bounds%begl : bounds%endl, :) = spval
     do j = 1,num2d
@@ -918,7 +751,7 @@ contains
        end do
        if (found) then
           write(iulog,*)'c2l_2d error: sumwt is greater than 1.0 at l= ',index,' lev= ',j
-          call endrun(decomp_index=index, clmlevel=namel, msg=errMsg(sourcefile, __LINE__))
+          call endrun(subgrid_index=index, subgrid_level=subgrid_level_landunit, msg=errMsg(sourcefile, __LINE__))
        end if
     end do
 
@@ -947,54 +780,13 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(carr) == (/bounds%endc/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(garr) == (/bounds%endg/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(carr) == (/bounds%endc/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(garr) == (/bounds%endg/)), sourcefile, __LINE__)
 
     call build_scale_l2g(bounds, l2g_scale_type, &
          scale_l2g(bounds%begl:bounds%endl))
 
-    if (c2l_scale_type == 'unity') then
-       do c = bounds%begc,bounds%endc
-          scale_c2l(c) = 1.0_r8
-       end do
-    else if (c2l_scale_type == 'urbanf') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0_r8
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else if (c2l_scale_type == 'urbans') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0 / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else
-       write(iulog,*)'c2l_1d error: scale type ',c2l_scale_type,' not supported'
-       call endrun(msg=errMsg(sourcefile, __LINE__))
-    end if
+    call set_c2l_scale (bounds, c2l_scale_type, scale_c2l)
 
     garr(bounds%begg : bounds%endg) = spval
     sumwt(bounds%begg : bounds%endg) = 0._r8
@@ -1020,7 +812,7 @@ contains
     end do
     if (found) then
        write(iulog,*)'c2g_1d error: sumwt is greater than 1.0 at g= ',index
-       call endrun(decomp_index=index, clmlevel=nameg, msg=errMsg(sourcefile, __LINE__))
+       call endrun(subgrid_index=index, subgrid_level=subgrid_level_gridcell, msg=errMsg(sourcefile, __LINE__))
     end if
 
   end subroutine c2g_1d
@@ -1049,54 +841,13 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(carr) == (/bounds%endc, num2d/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(garr) == (/bounds%endg, num2d/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(carr) == (/bounds%endc, num2d/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(garr) == (/bounds%endg, num2d/)), sourcefile, __LINE__)
 
     call build_scale_l2g(bounds, l2g_scale_type, &
          scale_l2g(bounds%begl:bounds%endl))
 
-    if (c2l_scale_type == 'unity') then
-       do c = bounds%begc,bounds%endc
-          scale_c2l(c) = 1.0_r8
-       end do
-    else if (c2l_scale_type == 'urbanf') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = 3.0 * lun%canyon_hwr(l) 
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0_r8
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else if (c2l_scale_type == 'urbans') then
-       do c = bounds%begc,bounds%endc
-          l = col%landunit(c) 
-          if (lun%urbpoi(l)) then
-             if (col%itype(c) == icol_sunwall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_shadewall) then
-                scale_c2l(c) = (3.0 * lun%canyon_hwr(l)) / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_road_perv .or. col%itype(c) == icol_road_imperv) then
-                scale_c2l(c) = 3.0 / (2.*lun%canyon_hwr(l) + 1.)
-             else if (col%itype(c) == icol_roof) then
-                scale_c2l(c) = 1.0_r8
-             end if
-          else
-             scale_c2l(c) = 1.0_r8
-          end if
-       end do
-    else
-       write(iulog,*)'c2g_2d error: scale type ',c2l_scale_type,' not supported'
-       call endrun(msg=errMsg(sourcefile, __LINE__))
-    end if
+    call set_c2l_scale (bounds, c2l_scale_type, scale_c2l)
 
     garr(bounds%begg : bounds%endg,:) = spval
     do j = 1,num2d
@@ -1123,7 +874,7 @@ contains
        end do
        if (found) then
           write(iulog,*)'c2g_2d error: sumwt is greater than 1.0 at g= ',index
-          call endrun(decomp_index=index, clmlevel=nameg, msg=errMsg(sourcefile, __LINE__))
+          call endrun(subgrid_index=index, subgrid_level=subgrid_level_gridcell, msg=errMsg(sourcefile, __LINE__))
        end if
     end do
 
@@ -1150,8 +901,8 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(larr) == (/bounds%endl/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(garr) == (/bounds%endg/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(larr) == (/bounds%endl/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(garr) == (/bounds%endg/)), sourcefile, __LINE__)
 
     call build_scale_l2g(bounds, l2g_scale_type, &
          scale_l2g(bounds%begl:bounds%endl))
@@ -1179,7 +930,7 @@ contains
     end do
     if (found) then
        write(iulog,*)'l2g_1d error: sumwt is greater than 1.0 at g= ',index
-       call endrun(decomp_index=index, clmlevel=nameg, msg=errMsg(sourcefile, __LINE__))
+       call endrun(subgrid_index=index, subgrid_level=subgrid_level_gridcell, msg=errMsg(sourcefile, __LINE__))
     end if
 
   end subroutine l2g_1d
@@ -1207,8 +958,8 @@ contains
     !------------------------------------------------------------------------
 
     ! Enforce expected array sizes
-    SHR_ASSERT_ALL((ubound(larr) == (/bounds%endl, num2d/)), errMsg(sourcefile, __LINE__))
-    SHR_ASSERT_ALL((ubound(garr) == (/bounds%endg, num2d/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(larr) == (/bounds%endl, num2d/)), sourcefile, __LINE__)
+    SHR_ASSERT_ALL_FL((ubound(garr) == (/bounds%endg, num2d/)), sourcefile, __LINE__)
 
     call build_scale_l2g(bounds, l2g_scale_type, &
          scale_l2g(bounds%begl:bounds%endl))
@@ -1237,7 +988,7 @@ contains
        end do
        if (found) then
           write(iulog,*)'l2g_2d error: sumwt is greater than 1.0 at g= ',index,' lev= ',j
-          call endrun(decomp_index=index, clmlevel=nameg, msg=errMsg(sourcefile, __LINE__))
+          call endrun(subgrid_index=index, subgrid_level=subgrid_level_gridcell, msg=errMsg(sourcefile, __LINE__))
        end if
     end do
 
@@ -1263,7 +1014,7 @@ contains
     integer  :: l                       ! index
     !-----------------------------------------------------------------------
      
-    SHR_ASSERT_ALL((ubound(scale_l2g) == (/bounds%endl/)), errMsg(sourcefile, __LINE__))
+    SHR_ASSERT_ALL_FL((ubound(scale_l2g) == (/bounds%endl/)), sourcefile, __LINE__)
 
     ! TODO(wjs, 2017-03-09) If this routine is a performance problem (which it may be,
     ! because I think it's called a lot), then a simple optimization would be to treat
@@ -1286,7 +1037,7 @@ contains
     ! each landunit type depending on l2g_scale_type
     !
     ! !USES:
-    use landunit_varcon, only : istsoil, istcrop, istice_mec, istdlak
+    use landunit_varcon, only : istsoil, istcrop, istice, istdlak
     use landunit_varcon, only : isturb_MIN, isturb_MAX, max_lunit
     !
     ! !ARGUMENTS:
@@ -1327,7 +1078,7 @@ contains
         scale_lookup(istsoil) = 1.0_r8
         scale_lookup(istcrop) = 1.0_r8
      else if (l2g_scale_type == 'ice') then
-        scale_lookup(istice_mec) = 1.0_r8
+        scale_lookup(istice) = 1.0_r8
      else if (l2g_scale_type == 'nonurb') then
         scale_lookup(:) = 1.0_r8
         scale_lookup(isturb_MIN:isturb_MAX) = spval
