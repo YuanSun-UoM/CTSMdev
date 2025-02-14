@@ -86,11 +86,11 @@ module UrbanDynAlbMod
      call this%urbanalbtvroof_interp(bounds)
      call hist_addfld2d (fname='DYNALB_ROOF_DIR', units='',      &
             avgflag='A', long_name='time varing urban roof albedo dir',  type2d='numrad', &
-            ptr_lunit=this%dyn_alb_wall_dir, default='inactive', set_nourb=spval, &
+            ptr_lunit=this%dyn_alb_roof_dir, default='inactive', set_nourb=spval, &
           l2g_scale_type='unity')
      call hist_addfld2d (fname='DYNALB_ROOF_DIF', units='',      &
             avgflag='A', long_name='time varing urban roof albedo dif',  type2d='numrad',  &
-            ptr_lunit=this%dyn_alb_wall_dif, default='inactive', set_nourb=spval, &
+            ptr_lunit=this%dyn_alb_roof_dif, default='inactive', set_nourb=spval, &
           l2g_scale_type='unity')
   end if
   

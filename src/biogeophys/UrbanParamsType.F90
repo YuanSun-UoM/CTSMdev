@@ -11,8 +11,7 @@ module UrbanParamsType
   use clm_varctl   , only : iulog, fsurdat
   use clm_varctl   , only : Dynamic_UrbanAlbedoRoof, Dynamic_UrbanAlbedoImproad, Dynamic_UrbanAlbedoWall
   use clm_varcon   , only : namel, grlnd, spval
-  use LandunitType , only : lun  
-  use UrbanDynAlbMod  , only : urbanalbtv_type            
+  use LandunitType , only : lun              
   ! 
   implicit none
   save
