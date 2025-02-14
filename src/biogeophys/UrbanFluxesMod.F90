@@ -99,7 +99,9 @@ contains
     use HumanIndexMod       , only : all_human_stress_indices, fast_human_stress_indices, &
                                      Wet_Bulb, Wet_BulbS, HeatIndex, AppTemp, &
                                      swbgt, hmdex, dis_coi, dis_coiS, THIndex, &
-                                     SwampCoolEff, KtoC, VaporPres
+!YS                                     
+                                     SwampCoolEff, KtoC, VaporPres, Dew_Point
+!YS                                     
     !
     ! !ARGUMENTS:
     type(bounds_type)      , intent(in)    :: bounds    
@@ -250,6 +252,9 @@ contains
 
          tc_ref2m            => humanindex_inst%tc_ref2m_patch              , & ! Output: [real(r8) (:)   ]  2 m height surface air temperature (C)
          vap_ref2m           => humanindex_inst%vap_ref2m_patch             , & ! Output: [real(r8) (:)   ]  2 m height vapor pressure (Pa)
+!YS 
+         vap_ref2m_u         => humanindex_inst%vap_ref2m_u_patch           , & ! Output: [real(r8) (:)   ]  Urban 2 m height vapor pressure (Pa)
+!YS          
          appar_temp_ref2m    => humanindex_inst%appar_temp_ref2m_patch      , & ! Output: [real(r8) (:)   ]  2 m apparent temperature (C)
          appar_temp_ref2m_u  => humanindex_inst%appar_temp_ref2m_u_patch    , & ! Output: [real(r8) (:)   ]  Urban 2 m apparent temperature (C)
          swbgt_ref2m         => humanindex_inst%swbgt_ref2m_patch           , & ! Output: [real(r8) (:)   ]  2 m Simplified Wetbulb Globe temperature (C)
@@ -278,7 +283,10 @@ contains
          swmp65_ref2m_u      => humanindex_inst%swmp65_ref2m_u_patch        , & ! Output: [real(r8) (:)   ]  Urban 2 m Swamp Cooler temperature 65% effi (C)
          swmp80_ref2m        => humanindex_inst%swmp80_ref2m_patch          , & ! Output: [real(r8) (:)   ]  2 m Swamp Cooler temperature 80% effi (C)
          swmp80_ref2m_u      => humanindex_inst%swmp80_ref2m_u_patch        , & ! Output: [real(r8) (:)   ]  Urban 2 m Swamp Cooler temperature 80% effi (C)
-
+!YS
+         dewpoint_ref2m      => humanindex_inst%dewpoint_ref2m_patch        , & ! Output: [real(r8) (:)   ]  2 m Dew Point temperature (C)
+         dewpoint_ref2m_u    => humanindex_inst%dewpoint_ref2m_u_patch      , & ! Output: [real(r8) (:)   ]  Urban 2 m Dew Point temperature (C)
+!YS
          frac_sno            =>   waterdiagnosticbulk_inst%frac_sno_col              , & ! Input:  [real(r8) (:)   ]  fraction of ground covered by snow (0 to 1)       
          snow_depth          =>   waterdiagnosticbulk_inst%snow_depth_col            , & ! Input:  [real(r8) (:)   ]  snow height (m)                                   
          dqgdT               =>   waterdiagnosticbulk_inst%dqgdT_col                 , & ! Input:  [real(r8) (:)   ]  temperature derivative of "qg"                    
@@ -908,6 +916,9 @@ contains
                call dis_coi(tc_ref2m(p), wb_ref2m(p), discomf_index_ref2m(p))
                call THIndex(tc_ref2m(p), wb_ref2m(p), thic_ref2m(p), thip_ref2m(p))
                call SwampCoolEff(tc_ref2m(p), wb_ref2m(p), swmp80_ref2m(p), swmp65_ref2m(p))
+!YS               
+               call Dew_Point(tc_ref2m(p), rh_ref2m(p), dewpoint_ref2m(p))
+!YS            
             end if
   
             wbt_ref2m_u(p)            = wbt_ref2m(p)
@@ -925,6 +936,10 @@ contains
                thip_ref2m_u(p)           = thip_ref2m(p)
                swmp80_ref2m_u(p)         = swmp80_ref2m(p)
                swmp65_ref2m_u(p)         = swmp65_ref2m(p)
+!YS               
+               dewpoint_ref2m_u(p)       = dewpoint_ref2m(p)
+               vap_ref2m_u(p)            = vap_ref2m(p)
+!Ys                
             end if
          end if
 

@@ -103,7 +103,9 @@ contains
     use HumanIndexMod       , only : all_human_stress_indices, fast_human_stress_indices, &
                                      Wet_Bulb, Wet_BulbS, HeatIndex, AppTemp, &
                                      swbgt, hmdex, dis_coi, dis_coiS, THIndex, &
-                                     SwampCoolEff, KtoC, VaporPres
+!YS                                     
+                                     SwampCoolEff, KtoC, VaporPres, Dew_Point
+!YS                                        
     !
     ! !ARGUMENTS:
     type(bounds_type)      , intent(in)    :: bounds  
@@ -223,7 +225,7 @@ contains
          sabg_lyr         =>    solarabs_inst%sabg_lyr_patch           , & ! Input:  [real(r8) (:,:) ]  absorbed solar radiation (pft,lyr) [W/m2]       
          sabg_chk         =>    solarabs_inst%sabg_chk_patch           , & ! Output: [real(r8) (:)   ]  sum of soil/snow using current fsno, for balance check
          sabg             =>    solarabs_inst%sabg_patch               , & ! Input:  [real(r8) (:)   ]  solar radiation absorbed by ground (W/m**2)       
-         
+          
          savedtke1        =>    lakestate_inst%savedtke1_col           , & ! Input:  [real(r8) (:)   ]  top level eddy conductivity from previous timestep (W/mK)
          lakefetch        =>    lakestate_inst%lakefetch_col           , & ! Input:  [real(r8) (:)   ]  lake fetch from surface data (m)                  
          
@@ -262,7 +264,9 @@ contains
          thic_ref2m      =>    humanindex_inst%thic_ref2m_patch        , & ! Output: [real(r8) (:)]  2 m Temperature Humidity Index Comfort (C)
          swmp65_ref2m    =>    humanindex_inst%swmp65_ref2m_patch      , & ! Output: [real(r8) (:)]  2 m Swamp Cooler temperature 65% effi (C)
          swmp80_ref2m    =>    humanindex_inst%swmp80_ref2m_patch      , & ! Output: [real(r8) (:)]  2 m Swamp Cooler temperature 80% effi (C)
-
+!YS         
+         dewpoint_ref2m  =>    humanindex_inst%dewpoint_ref2m_patch    , & ! Output: [real(r8) (:)]  2 m Dew Point temperature (C)
+!YS
          qflx_evap_soi    =>    waterfluxbulk_inst%qflx_evap_soi_patch     , & ! Output: [real(r8) (:)   ]  soil evaporation (mm H2O/s) (+ = to atm)          
          qflx_evap_tot    =>    waterfluxbulk_inst%qflx_evap_tot_patch     , & ! Output: [real(r8) (:)   ]  qflx_evap_soi + qflx_evap_can + qflx_tran_veg     
 
@@ -733,6 +737,9 @@ contains
                call dis_coi(tc_ref2m(p), wb_ref2m(p), discomf_index_ref2m(p))
                call THIndex(tc_ref2m(p), wb_ref2m(p), thic_ref2m(p), thip_ref2m(p))
                call SwampCoolEff(tc_ref2m(p), wb_ref2m(p), swmp80_ref2m(p), swmp65_ref2m(p))
+!YS               
+               call Dew_Point(tc_ref2m(p), rh_ref2m(p), dewpoint_ref2m(p))
+!YS 
             end if
          end if
 

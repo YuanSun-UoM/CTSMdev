@@ -90,7 +90,9 @@ contains
     use HumanIndexMod        , only : all_human_stress_indices, fast_human_stress_indices, &
                                       Wet_Bulb, Wet_BulbS, HeatIndex, AppTemp, &
                                       swbgt, hmdex, dis_coi, dis_coiS, THIndex, &
-                                      SwampCoolEff, KtoC, VaporPres
+!YS                                          
+                                      SwampCoolEff, KtoC, VaporPres, Dew_Point
+!YS                                          
     use CanopyStateType      , only : canopystate_type
 
     !
@@ -156,6 +158,9 @@ contains
 
          tc_ref2m               => humanindex_inst%tc_ref2m_patch               , & ! Output: [real(r8) (:)   ]  2 m height surface air temperature (C)
          vap_ref2m              => humanindex_inst%vap_ref2m_patch              , & ! Output: [real(r8) (:)   ]  2 m height vapor pressure (Pa)
+!YS
+         vap_ref2m_r            => humanindex_inst%vap_ref2m_r_patch            , & ! Output: [real(r8) (:)   ]  Rural 2 m height vapor pressure (Pa)
+!YS         
          appar_temp_ref2m       => humanindex_inst%appar_temp_ref2m_patch       , & ! Output: [real(r8) (:)   ]  2 m apparent temperature (C)
          appar_temp_ref2m_r     => humanindex_inst%appar_temp_ref2m_r_patch     , & ! Output: [real(r8) (:)   ]  Rural 2 m apparent temperature (C)
          swbgt_ref2m            => humanindex_inst%swbgt_ref2m_patch            , & ! Output: [real(r8) (:)   ]  2 m Simplified Wetbulb Globe temperature (C)
@@ -184,7 +189,10 @@ contains
          swmp65_ref2m_r         => humanindex_inst%swmp65_ref2m_r_patch         , & ! Output: [real(r8) (:)   ]  Rural 2 m Swamp Cooler temperature 65% effi (C)
          swmp80_ref2m           => humanindex_inst%swmp80_ref2m_patch           , & ! Output: [real(r8) (:)   ]  2 m Swamp Cooler temperature 80% effi (C)
          swmp80_ref2m_r         => humanindex_inst%swmp80_ref2m_r_patch         , & ! Output: [real(r8) (:)   ]  Rural 2 m Swamp Cooler temperature 80% effi (C)
-
+!YS
+         dewpoint_ref2m         => humanindex_inst%dewpoint_ref2m_patch         , & ! Output: [real(r8) (:)   ]  2 m Dew Point temperature (C)
+         dewpoint_ref2m_r       => humanindex_inst%dewpoint_ref2m_r_patch       , & ! Output: [real(r8) (:)   ]  Rural 2 m Dew Point temperature (C)
+!YS
          forc_u                 => atm2lnd_inst%forc_u_grc                      , & ! Input:  [real(r8) (:)   ]  atmospheric wind speed in east direction (m/s)                        
          forc_v                 => atm2lnd_inst%forc_v_grc                      , & ! Input:  [real(r8) (:)   ]  atmospheric wind speed in north direction (m/s)                       
          forc_th                => atm2lnd_inst%forc_th_downscaled_col          , & ! Input:  [real(r8) (:)   ]  atmospheric potential temperature (Kelvin)                            
@@ -494,6 +502,9 @@ contains
                call dis_coi(tc_ref2m(p), wb_ref2m(p), discomf_index_ref2m(p))
                call THIndex(tc_ref2m(p), wb_ref2m(p), thic_ref2m(p), thip_ref2m(p))
                call SwampCoolEff(tc_ref2m(p), wb_ref2m(p), swmp80_ref2m(p), swmp65_ref2m(p))
+!YS               
+               call Dew_Point(tc_ref2m(p), rh_ref2m(p), dewpoint_ref2m(p))
+!YS                 
             end if
   
             if (lun%itype(l) == istsoil .or. lun%itype(l) == istcrop) then
@@ -512,6 +523,10 @@ contains
                  thip_ref2m_r(p)           = thip_ref2m(p)
                  swmp80_ref2m_r(p)         = swmp80_ref2m(p)
                  swmp65_ref2m_r(p)         = swmp65_ref2m(p)
+!YS                 
+                 dewpoint_ref2m_r(p)       = dewpoint_ref2m(p)
+                 vap_ref2m_r(p)            = vap_ref2m(p)
+!YS                 
               end if
             end if
 

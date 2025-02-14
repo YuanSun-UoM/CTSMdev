@@ -39,7 +39,9 @@ module HumanIndexMod
   public :: KtoC                 ! Convert Kelvin to Celcius
   public :: VaporPres            ! Vapor pressure
   public :: QSat_2               ! Saturation mix. ratio and the change in sat. mix rat. with respect to Temp
-
+!YS  
+  public :: Dew_Point            ! Dew point temperature
+!YS 
 !
 ! !PUBLIC MEMBER DATA:
   character(len= *), parameter, public :: calc_human_stress_indices_all  = 'ALL'
@@ -52,6 +54,10 @@ module HumanIndexMod
   type,    public :: humanindex_type   
      real(r8), pointer :: tc_ref2m_patch              (:) ! Patch 2 m height surface air temperature (C)
      real(r8), pointer :: vap_ref2m_patch             (:) ! Patch 2 m height vapor pressure (Pa)
+!YS
+     real(r8), pointer :: vap_ref2m_r_patch           (:) ! Patch Rural 2 m height vapor pressure (Pa)
+     real(r8), pointer :: vap_ref2m_u_patch           (:) ! Patch Urban 2 m height vapor pressure (Pa)
+!YS     
      real(r8), pointer :: appar_temp_ref2m_patch      (:) ! Patch 2 m apparent temperature (C)
      real(r8), pointer :: appar_temp_ref2m_r_patch    (:) ! Patch Rural 2 m apparent temperature (C)
      real(r8), pointer :: swbgt_ref2m_patch           (:) ! Patch 2 m Simplified Wetbulb Globe temperature (C)
@@ -94,6 +100,11 @@ module HumanIndexMod
      real(r8), pointer :: thic_ref2m_u_patch          (:) !Urban 2 m Temperature Humidity Index Comfort (C)
      real(r8), pointer :: swmp65_ref2m_u_patch        (:) !Urban 2 m Swamp Cooler temperature 65% effi (C)
      real(r8), pointer :: swmp80_ref2m_u_patch        (:) !Urban 2 m Swamp Cooler temperature 80% effi (C) temperature (K)
+!YS     
+     real(r8), pointer :: dewpoint_ref2m_patch        (:) !Patch 2 m Dew Point temperature (C)
+     real(r8), pointer :: dewpoint_ref2m_u_patch      (:) !Patch Urban 2 m Dew Point temperature (C)
+     real(r8), pointer :: dewpoint_ref2m_r_patch      (:) !Patch Rural 2 m Dew Point temperature (C)
+!YS      
   contains
      procedure, public  :: Init                ! Public initialization
      procedure, private :: InitAllocate        ! Private allocation method
@@ -136,6 +147,8 @@ module HumanIndexMod
 !    QSatMod at high RH and T>45C.
 ! Modified JRBuzan 12-29-20--- Qinqin Kong discovered an error in
 !    QSat_2Mod. The derivative of F(Tw;pi) = F(Tw;pi) * dlnF(Tw;pi)/dTw.
+!YS Modified 06-06-24 --- Added new convergence routine for
+!YS    Dew point temperature.  Using the Magnus-Tetens formula.
 !EOP
 !-----------------------------------------------------------------------
 
@@ -207,6 +220,10 @@ subroutine InitAllocate(this, bounds)
     begp = bounds%begp; endp= bounds%endp
 
     allocate(this%vap_ref2m_patch              (begp:endp))                    ; this%vap_ref2m_patch             (:)  = nan
+!YS
+    allocate(this%vap_ref2m_u_patch            (begp:endp))                    ; this%vap_ref2m_u_patch           (:)  = nan
+    allocate(this%vap_ref2m_r_patch            (begp:endp))                    ; this%vap_ref2m_r_patch           (:)  = nan
+!YS    
     allocate(this%tc_ref2m_patch               (begp:endp))                    ; this%tc_ref2m_patch              (:)  = nan
     allocate(this%humidex_ref2m_patch          (begp:endp))                    ; this%humidex_ref2m_patch         (:)  = nan
     allocate(this%humidex_ref2m_u_patch        (begp:endp))                    ; this%humidex_ref2m_u_patch       (:)  = nan
@@ -251,6 +268,11 @@ subroutine InitAllocate(this, bounds)
     allocate(this%swmp80_ref2m_patch           (begp:endp))                    ; this%swmp80_ref2m_patch          (:)  = nan
     allocate(this%swmp80_ref2m_r_patch         (begp:endp))                    ; this%swmp80_ref2m_r_patch        (:)  = nan
     allocate(this%swmp80_ref2m_u_patch         (begp:endp))                    ; this%swmp80_ref2m_u_patch        (:)  = nan
+!YS    
+    allocate(this%dewpoint_ref2m_patch         (begp:endp))                    ; this%dewpoint_ref2m_patch        (:)  = nan
+    allocate(this%dewpoint_ref2m_r_patch       (begp:endp))                    ; this%dewpoint_ref2m_r_patch      (:)  = nan
+    allocate(this%dewpoint_ref2m_u_patch       (begp:endp))                    ; this%dewpoint_ref2m_u_patch      (:)  = nan
+!YS
 
 end subroutine InitAllocate
 
@@ -486,7 +508,37 @@ subroutine InitHistory(this, bounds)
        call hist_addfld1d (fname='DISCOIS_R', units='C',  &
                avgflag='A', long_name='Rural 2 m Stull Discomfort Index', &
                ptr_patch=this%discomf_index_ref2mS_r_patch, set_spec=spval)
+!YS
+       this%dewpoint_ref2m_patch(begp:endp) = spval
+       call hist_addfld1d (fname='DEWPOINT', units='C',  &
+               avgflag='A', long_name='2 m Dew Point Temperature', &
+               ptr_patch=this%dewpoint_ref2m_patch)
 
+       this%dewpoint_ref2m_u_patch(begp:endp) = spval
+       call hist_addfld1d (fname='DEWPOINT_U', units='C',  &
+               avgflag='A', long_name='Urban 2 m Dew Point Temperature', &
+               ptr_patch=this%dewpoint_ref2m_u_patch, set_nourb=spval)
+
+       this%dewpoint_ref2m_r_patch(begp:endp) = spval
+       call hist_addfld1d (fname='DEWPOINT_R', units='C',  &
+               avgflag='A', long_name='Rural 2 m Dew Point Temperature', &
+               ptr_patch=this%dewpoint_ref2m_r_patch, set_spec=spval)        
+       
+       this%vap_ref2m_patch(begp:endp) = spval
+       call hist_addfld1d (fname='VAPOR_PRES', units='Pa',  &
+               avgflag='A', long_name='2 m vapor pressure', &
+               ptr_patch=this%vap_ref2m_patch)
+
+       this%vap_ref2m_u_patch(begp:endp) = spval
+       call hist_addfld1d (fname='VAPOR_PRES_U', units='Pa',  &
+               avgflag='A', long_name='Urban 2 m vapor pressure', &
+               ptr_patch=this%vap_ref2m_u_patch, set_nourb=spval)
+
+       this%vap_ref2m_r_patch(begp:endp) = spval
+       call hist_addfld1d (fname='VAPOR_PRES_R', units='Pa',  &
+               avgflag='A', long_name='Rural 2 m vapor pressure', &
+               ptr_patch=this%vap_ref2m_r_patch, set_spec=spval)
+!YS 
     end if
 
 end subroutine InitHistory
@@ -1385,6 +1437,50 @@ end subroutine InitHistory
   end subroutine QSat_2
 !EOP
 !-----------------------------------------------------------------------
+!YS
+!-----------------------------------------------------------------------
+!BOP
+!
+! !IROUTINE: Dew_Point
+!
+! !INTERFACE:
+  subroutine Dew_Point (Tc_10, rh, dewpoint)
+!
+! !DESCRIPTION:
+! 
+! Reference:  
+!
+! !USES:
+    use shr_kind_mod , only: r8 => shr_kind_r8
+!
+! !ARGUMENTS:
+    implicit none
+    real(r8), intent(in)  :: Tc_10     ! Temperature (C)
+    real(r8), intent(in)  :: rh        ! Relative Humidity (%)
+    real(r8), intent(out) :: dewpoint  ! Dew point temperature (C)
+!
+! !CALLED FROM:
+! subroutines within this module
+!
+! !REVISION HISTORY:
+! Created by: Yuan Sun 06/06/24
+!
+! !LOCAL VARIABLES:
+!EOP
+!
+!
+    real(r8) :: a = 17.67_r8     ! Constant to calculate vapour pressure
+    real(r8) :: b = 243.5_r8     ! Constant to calculate vapour pressure
+    real(r8) :: alpha
+!
+!-----------------------------------------------------------------------
+    ! Magnus-Tetens formula
+    alpha = (a * Tc_10) / (b + Tc_10) + log(rh / 100.0_r8)
+    dewpoint = (b * alpha) / (a - alpha)
 
+  end subroutine Dew_Point
+!EOP
+!-----------------------------------------------------------------------
+!YS
 end module HumanIndexMod
 

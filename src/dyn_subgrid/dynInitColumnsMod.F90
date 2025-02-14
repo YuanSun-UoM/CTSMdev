@@ -127,10 +127,7 @@ contains
     case(istwet)
        write(iulog,*) subname// ' ERROR: Ability to initialize a newly-active wetland column not yet implemented'
        call endrun(subgrid_index=c_new, subgrid_level=subgrid_level_column, msg=errMsg(sourcefile, __LINE__))
-!YS    case(isturb_MIN:isturb_MAX)
-!YS
-   case(isturb_MIN:)
-!YS   
+    case(isturb_MIN:isturb_MAX)
        write(iulog,*) subname// ' ERROR: Ability to initialize a newly-active urban column not yet implemented'
        call endrun(subgrid_index=c_new, subgrid_level=subgrid_level_column, msg=errMsg(sourcefile, __LINE__))
     case default
