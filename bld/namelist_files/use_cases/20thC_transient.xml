@@ -53,4 +53,27 @@
 <stream_year_last_urbantv  phys="clm4_5"  >2106</stream_year_last_urbantv>
 <model_year_align_urbantv  phys="clm4_5"  >1850</model_year_align_urbantv>
 
+<stream_year_first_urbanalbtvroof phys="clm5_0"  >1850</stream_year_first_urbanalbtvroof>
+<stream_year_last_urbanalbtvroof  phys="clm5_0"  >2106</stream_year_last_urbanalbtvroof>
+<model_year_align_urbanalbtvroof  phys="clm5_0"  >1850</model_year_align_urbanalbtvroof>
+
+<stream_year_first_urbanalbtvroof phys="clm4_5"  >1850</stream_year_first_urbanalbtvroof>
+<stream_year_last_urbanalbtvroof  phys="clm4_5"  >2106</stream_year_last_urbanalbtvroof>
+<model_year_align_urbanalbtvroof  phys="clm4_5"  >1850</model_year_align_urbanalbtvroof>
+
+<stream_year_first_urbanalbtvimproad phys="clm5_0"  >1850</stream_year_first_urbanalbtvimproad>
+<stream_year_last_urbanalbtvimproad  phys="clm5_0"  >2106</stream_year_last_urbanalbtvimproad>
+<model_year_align_urbanalbtvimproad  phys="clm5_0"  >1850</model_year_align_urbanalbtvimproad>
+
+<stream_year_first_urbanalbtvimproad phys="clm4_5"  >1850</stream_year_first_urbanalbtvimproad>
+<stream_year_last_urbanalbtvimproad  phys="clm4_5"  >2106</stream_year_last_urbanalbtvimproad>
+<model_year_align_urbanalbtvimproad  phys="clm4_5"  >1850</model_year_align_urbanalbtvimproad>
+
+<stream_year_first_urbanalbtvwall phys="clm5_0"  >1850</stream_year_first_urbanalbtvwall>
+<stream_year_last_urbanalbtvwall  phys="clm5_0"  >2106</stream_year_last_urbanalbtvwall>
+<model_year_align_urbanalbtvwall  phys="clm5_0"  >1850</model_year_align_urbanalbtvwall>
+
+<stream_year_first_urbanalbtvwall phys="clm4_5"  >1850</stream_year_first_urbanalbtvwall>
+<stream_year_last_urbanalbtvwall  phys="clm4_5"  >2106</stream_year_last_urbanalbtvwall>
+<model_year_align_urbanalbtvwall  phys="clm4_5"  >1850</model_year_align_urbanalbtvwall>
 </namelist_defaults>

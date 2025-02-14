@@ -22,6 +22,7 @@ list(APPEND clm_sources
   SurfaceAlbedoType.F90
   TemperatureType.F90
   TotalWaterAndHeatMod.F90
+  UrbanDynAlbMod.F90
   UrbanParamsType.F90
   WaterfluxType.F90
   WaterStateType.F90

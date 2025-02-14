@@ -1,29 +1,30 @@
 module UrbanParamsType
-
   !------------------------------------------------------------------------------
   ! !DESCRIPTION:
-  ! Urban Constants
-  !
+  ! Urban Parameters
+  ! 
   ! !USES:
   use shr_kind_mod , only : r8 => shr_kind_r8
   use shr_log_mod  , only : errMsg => shr_log_errMsg
   use abortutils   , only : endrun
   use decompMod    , only : bounds_type
   use clm_varctl   , only : iulog, fsurdat
+  use clm_varctl   , only : Dynamic_UrbanAlbedoRoof, Dynamic_UrbanAlbedoImproad, Dynamic_UrbanAlbedoWall
   use clm_varcon   , only : namel, grlnd, spval
-  use LandunitType , only : lun                
-  !
+  use LandunitType , only : lun  
+  use UrbanDynAlbMod  , only : urbanalbtv_type            
+  ! 
   implicit none
   save
   private
-  !
+  ! 
   ! !PUBLIC MEMBER FUNCTIONS:
   public  :: UrbanReadNML      ! Read in the urban namelist items
   public  :: UrbanInput        ! Read in urban input data
   public  :: CheckUrban        ! Check validity of urban points
   public  :: IsSimpleBuildTemp ! If using the simple building temperature method
   public  :: IsProgBuildTemp   ! If using the prognostic building temperature method
-  !
+  ! 
   ! !PRIVATE TYPE
   type urbinp_type
      real(r8), pointer :: canyon_hwr      (:,:)  
@@ -54,6 +55,7 @@ module UrbanParamsType
      integer,  pointer :: nlev_improad    (:,:)
      real(r8), pointer :: t_building_min  (:,:)
   end type urbinp_type
+  
   type (urbinp_type), public :: urbinp   ! urban input derived type
 
   ! !PUBLIC TYPE
@@ -90,18 +92,20 @@ module UrbanParamsType
 
      real(r8), pointer     :: t_building_min      (:)   ! lun minimum internal building air temperature (K)
      real(r8), pointer     :: eflx_traffic_factor (:)   ! lun multiplicative traffic factor for sensible heat flux from urban traffic (-)
+     
    contains
 
      procedure, public :: Init 
      
   end type urbanparams_type
-  !
+  ! 
   ! !Urban control variables
   character(len= *), parameter, public :: urban_hac_off = 'OFF'                
   character(len= *), parameter, public :: urban_hac_on =  'ON'                 
   character(len= *), parameter, public :: urban_wasteheat_on = 'ON_WASTEHEAT'  
   character(len= 16), public           :: urban_hac = urban_hac_off
   logical, public                      :: urban_traffic = .false.     ! urban traffic fluxes
+  
 
   ! !PRIVATE MEMBER DATA:
   logical, private    :: ReadNamelist = .false.     ! If namelist was read yet or not
@@ -129,10 +133,11 @@ contains
     use column_varcon   , only : icol_roof, icol_sunwall, icol_shadewall
     use column_varcon   , only : icol_road_perv, icol_road_imperv, icol_road_perv
     use landunit_varcon , only : isturb_MIN
+    use histFileMod     , only : hist_addfld1d  
     !
     ! !ARGUMENTS:
     class(urbanparams_type) :: this
-    type(bounds_type)      , intent(in)    :: bounds  
+    type(bounds_type)      , intent(in)    :: bounds
     !
     ! !LOCAL VARIABLES:
     integer             :: j,l,c,p,g       ! indices
@@ -157,8 +162,7 @@ contains
     begl = bounds%begl; endl = bounds%endl
     begg = bounds%begg; endg = bounds%endg
 
-    ! Allocate urbanparams data structure
-
+    ! Allocate urbanparams data structure  
     if ( nlevurb > 0 )then
        allocate(this%tk_wall          (begl:endl,nlevurb))  ; this%tk_wall             (:,:) = nan
        allocate(this%tk_roof          (begl:endl,nlevurb))  ; this%tk_roof             (:,:) = nan
@@ -194,24 +198,38 @@ contains
     ! Initialize time constant urban variables
 
     do l = bounds%begl,bounds%endl
-
        ! "0" refers to urban wall/roof surface and "nlevsoi" refers to urban wall/roof bottom
        if (lun%urbpoi(l)) then
-
           g = lun%gridcell(l)
           dindx = lun%itype(l) - isturb_MIN + 1
 
           this%wind_hgt_canyon(l) = urbinp%wind_hgt_canyon(g,dindx)
           do ib = 1,numrad
-             this%alb_roof_dir   (l,ib) = urbinp%alb_roof_dir   (g,dindx,ib)
-             this%alb_roof_dif   (l,ib) = urbinp%alb_roof_dif   (g,dindx,ib)
-             this%alb_improad_dir(l,ib) = urbinp%alb_improad_dir(g,dindx,ib)
              this%alb_perroad_dir(l,ib) = urbinp%alb_perroad_dir(g,dindx,ib)
-             this%alb_improad_dif(l,ib) = urbinp%alb_improad_dif(g,dindx,ib)
              this%alb_perroad_dif(l,ib) = urbinp%alb_perroad_dif(g,dindx,ib)
-             this%alb_wall_dir   (l,ib) = urbinp%alb_wall_dir   (g,dindx,ib)
-             this%alb_wall_dif   (l,ib) = urbinp%alb_wall_dif   (g,dindx,ib)
           end do
+          
+          if (.not. Dynamic_UrbanAlbedoRoof) then
+             do ib = 1,numrad
+                this%alb_roof_dir   (l,ib) = urbinp%alb_roof_dir   (g,dindx,ib)
+                this%alb_roof_dif   (l,ib) = urbinp%alb_roof_dif   (g,dindx,ib)
+             end do
+          end if
+          
+          if (.not. Dynamic_UrbanAlbedoImproad) then
+             do ib = 1,numrad
+                this%alb_improad_dir   (l,ib) = urbinp%alb_improad_dir   (g,dindx,ib)
+                this%alb_improad_dif   (l,ib) = urbinp%alb_improad_dif   (g,dindx,ib)
+             end do
+          end if
+           
+           if (.not. Dynamic_UrbanAlbedoWall) then
+             do ib = 1,numrad
+                this%alb_wall_dir   (l,ib) = urbinp%alb_wall_dir   (g,dindx,ib)
+                this%alb_wall_dif   (l,ib) = urbinp%alb_wall_dif   (g,dindx,ib)
+             end do
+          end if
+                
           this%em_roof   (l) = urbinp%em_roof   (g,dindx)
           this%em_improad(l) = urbinp%em_improad(g,dindx)
           this%em_perroad(l) = urbinp%em_perroad(g,dindx)
@@ -362,7 +380,6 @@ contains
     ! Deallocate memory for urbinp datatype
     
     call UrbanInput(bounds%begg, bounds%endg, mode='finalize')
-
   end subroutine Init
 
   !-----------------------------------------------------------------------
@@ -398,8 +415,7 @@ contains
     logical :: readvar               ! true => variable is on dataset
     logical :: has_numurbl           ! true => numurbl dimension is on dataset
     character(len=32) :: subname = 'UrbanInput' ! subroutine name
-    !-----------------------------------------------------------------------
-
+    !-----------------------------------------------------------------------    
     if ( nlevurb == 0 ) return
 
     if (mode == 'initialize') then
@@ -416,7 +432,7 @@ contains
        if (masterproc) then
           write(iulog,*) subname,trim(fsurdat)
        end if
-
+    
        ! Check whether this file has new-format urban data
        call ncd_inqdid(ncid, 'numurbl', dimid, dimexist=has_numurbl)
 
@@ -428,6 +444,7 @@ contains
        end if
 
        if ( nlevurb == 0 ) return
+       
 
        ! Allocate dynamic memory
        allocate(urbinp%canyon_hwr(begg:endg, numurbl), &  
@@ -570,18 +587,20 @@ contains
        if (.not. readvar) then
           call endrun( msg=' ERROR: T_BUILDING_MIN NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
        end if
-
-       call ncd_io(ncid=ncid, varname='ALB_IMPROAD_DIR', flag='read', data=urbinp%alb_improad_dir, &
+      
+       if (.not. Dynamic_UrbanAlbedoImproad) then 
+         call ncd_io(ncid=ncid, varname='ALB_IMPROAD_DIR', flag='read', data=urbinp%alb_improad_dir, &
             dim1name=grlnd, readvar=readvar)
-       if (.not.readvar) then
-          call endrun( msg=' ERROR: ALB_IMPROAD_DIR NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
-       end if
+         if (.not.readvar) then
+            call endrun( msg=' ERROR: ALB_IMPROAD_DIR NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
+         end if
 
-       call ncd_io(ncid=ncid, varname='ALB_IMPROAD_DIF', flag='read', data=urbinp%alb_improad_dif, &
+         call ncd_io(ncid=ncid, varname='ALB_IMPROAD_DIF', flag='read', data=urbinp%alb_improad_dif, &
             dim1name=grlnd, readvar=readvar)
-       if (.not.readvar) then
-          call endrun( msg=' ERROR: ALB_IMPROAD_DIF NOT on fsurdat file'//errmsg(sourcefile, __LINE__) )
-       end if
+         if (.not.readvar) then
+            call endrun( msg=' ERROR: ALB_IMPROAD_DIF NOT on fsurdat file'//errmsg(sourcefile, __LINE__) )
+         end if
+       end if   
 
        call ncd_io(ncid=ncid, varname='ALB_PERROAD_DIR', flag='read',data=urbinp%alb_perroad_dir, &
             dim1name=grlnd, readvar=readvar)
@@ -594,31 +613,35 @@ contains
        if (.not. readvar) then
           call endrun( msg=' ERROR: ALB_PERROAD_DIF NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
        end if
+       
+       if (.not. Dynamic_UrbanAlbedoWall) then
+          call ncd_io(ncid=ncid, varname='ALB_WALL_DIR', flag='read', data=urbinp%alb_wall_dir, &
+               dim1name=grlnd, readvar=readvar)
+          if (.not. readvar) then
+             call endrun( msg=' ERROR: ALB_WALL_DIR NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
+          end if
 
-       call ncd_io(ncid=ncid, varname='ALB_ROOF_DIR', flag='read', data=urbinp%alb_roof_dir,  &
-            dim1name=grlnd, readvar=readvar)
-       if (.not. readvar) then
-          call endrun( msg=' ERROR: ALB_ROOF_DIR NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
+          call ncd_io(ncid=ncid, varname='ALB_WALL_DIF', flag='read', data=urbinp%alb_wall_dif, &
+               dim1name=grlnd, readvar=readvar)
+          if (.not. readvar) then
+             call endrun( msg=' ERROR: ALB_WALL_DIF NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
+          end if
        end if
-
-       call ncd_io(ncid=ncid, varname='ALB_ROOF_DIF', flag='read', data=urbinp%alb_roof_dif,  &
+       
+       if (.not. Dynamic_UrbanAlbedoRoof) then
+          call ncd_io(ncid=ncid, varname='ALB_ROOF_DIR', flag='read', data=urbinp%alb_roof_dir,  &
             dim1name=grlnd, readvar=readvar)
-       if (.not. readvar) then
-          call endrun( msg=' ERROR: ALB_ROOF_DIF NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
-       end if
+          if (.not. readvar) then
+             call endrun( msg=' ERROR: ALB_ROOF_DIR NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
+          end if
 
-       call ncd_io(ncid=ncid, varname='ALB_WALL_DIR', flag='read', data=urbinp%alb_wall_dir, &
+          call ncd_io(ncid=ncid, varname='ALB_ROOF_DIF', flag='read', data=urbinp%alb_roof_dif,  &
             dim1name=grlnd, readvar=readvar)
-       if (.not. readvar) then
-          call endrun( msg=' ERROR: ALB_WALL_DIR NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
+          if (.not. readvar) then
+             call endrun( msg=' ERROR: ALB_ROOF_DIF NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
+          end if     
        end if
-
-       call ncd_io(ncid=ncid, varname='ALB_WALL_DIF', flag='read', data=urbinp%alb_wall_dif, &
-            dim1name=grlnd, readvar=readvar)
-       if (.not. readvar) then
-          call endrun( msg=' ERROR: ALB_WALL_DIF NOT on fsurdat file'//errmsg(sourcefile, __LINE__))
-       end if
-
+       
        call ncd_io(ncid=ncid, varname='TK_IMPROAD', flag='read', data=urbinp%tk_improad, &
             dim1name=grlnd, readvar=readvar)
        if (.not. readvar) then
@@ -662,9 +685,7 @@ contains
        end if
 
     else if (mode == 'finalize') then
-
        if ( nlevurb == 0 ) return
-
        deallocate(urbinp%canyon_hwr, &
                   urbinp%wtlunit_roof, &
                   urbinp%wtroad_perv, &
@@ -700,7 +721,6 @@ contains
        write(iulog,*)'initUrbanInput error: mode ',trim(mode),' not supported '
        call endrun(msg=errmsg(sourcefile, __LINE__))
     end if
-
   end subroutine UrbanInput
 
   !-----------------------------------------------------------------------
@@ -734,7 +754,8 @@ contains
     found = .false.
     do nl = begg,endg
        do n = 1, numurbl
-          if ( pcturb(nl,n) > 0.0_r8 ) then
+          if ( pcturb(nl,n) > 0.0_r8 .and. (.not. Dynamic_UrbanAlbedoRoof) .and. &
+             (.not. Dynamic_UrbanAlbedoImproad) .and. (.not. Dynamic_UrbanAlbedoWall)) then
              if ( .not. urban_valid(nl) .or. &
                   urbinp%canyon_hwr(nl,n)            <= 0._r8 .or. &
                   urbinp%em_improad(nl,n)            <= 0._r8 .or. &
@@ -791,7 +812,6 @@ contains
        write(iulog,*)'em_wall:         ',urbinp%em_wall(nindx,dindx)
        write(iulog,*)'ht_roof:         ',urbinp%ht_roof(nindx,dindx)
        write(iulog,*)'thick_roof:      ',urbinp%thick_roof(nindx,dindx)
-       write(iulog,*)'thick_wall:      ',urbinp%thick_wall(nindx,dindx)
        write(iulog,*)'t_building_min:  ',urbinp%t_building_min(nindx,dindx)
        write(iulog,*)'wind_hgt_canyon: ',urbinp%wind_hgt_canyon(nindx,dindx)
        write(iulog,*)'wtlunit_roof:    ',urbinp%wtlunit_roof(nindx,dindx)
@@ -800,10 +820,10 @@ contains
        write(iulog,*)'alb_improad_dif: ',urbinp%alb_improad_dif(nindx,dindx,:)
        write(iulog,*)'alb_perroad_dir: ',urbinp%alb_perroad_dir(nindx,dindx,:)
        write(iulog,*)'alb_perroad_dif: ',urbinp%alb_perroad_dif(nindx,dindx,:)
-       write(iulog,*)'alb_roof_dir:    ',urbinp%alb_roof_dir(nindx,dindx,:)
-       write(iulog,*)'alb_roof_dif:    ',urbinp%alb_roof_dif(nindx,dindx,:)
        write(iulog,*)'alb_wall_dir:    ',urbinp%alb_wall_dir(nindx,dindx,:)
        write(iulog,*)'alb_wall_dif:    ',urbinp%alb_wall_dif(nindx,dindx,:)
+       write(iulog,*)'alb_roof_dir:    ',urbinp%alb_roof_dir(nindx,dindx,:)
+       write(iulog,*)'alb_roof_dif:    ',urbinp%alb_roof_dif(nindx,dindx,:)                  
        write(iulog,*)'tk_roof:         ',urbinp%tk_roof(nindx,dindx,:)
        write(iulog,*)'tk_wall:         ',urbinp%tk_wall(nindx,dindx,:)
        write(iulog,*)'cv_roof:         ',urbinp%cv_roof(nindx,dindx,:)
@@ -815,7 +835,6 @@ contains
        end if
        call endrun(msg=errmsg(sourcefile, __LINE__))
     end if
-
   end subroutine CheckUrban
 
   !-----------------------------------------------------------------------
@@ -850,7 +869,9 @@ contains
     integer :: unitn                ! unit for namelist file
     character(len=32) :: subname = 'UrbanReadNML'  ! subroutine name
 
-    namelist / clmu_inparm / urban_hac, urban_traffic, building_temp_method
+    namelist / clmu_inparm / urban_hac, urban_traffic, building_temp_method, &
+     Dynamic_UrbanAlbedoRoof, Dynamic_UrbanAlbedoImproad, Dynamic_UrbanAlbedoWall
+    
     !EOP
     !-----------------------------------------------------------------------
 
@@ -880,18 +901,20 @@ contains
     call shr_mpi_bcast(urban_hac,             mpicom)
     call shr_mpi_bcast(urban_traffic,         mpicom)
     call shr_mpi_bcast(building_temp_method,  mpicom)
-
-    !
+    ! 
     if (urban_traffic) then
        write(iulog,*)'Urban traffic fluxes are not implemented currently'
        call endrun(msg=errMsg(sourcefile, __LINE__))
     end if
-    !
+    ! 
     if ( masterproc )then
        write(iulog,*) '   urban air conditioning/heating and wasteheat   = ', urban_hac
        write(iulog,*) '   urban traffic flux   = ', urban_traffic
+       write(iulog,*) '   dynamic urban roof albedo   = ', Dynamic_UrbanAlbedoRoof
+       write(iulog,*) '   dynamic urban improad albedo   = ', Dynamic_UrbanAlbedoImproad
+       write(iulog,*) '   dynamic urban improad albedo   = ', Dynamic_UrbanAlbedoWall
     end if
-
+    
     ReadNamelist = .true.
 
   end subroutine UrbanReadNML
@@ -951,9 +974,7 @@ contains
     IsProgBuildTemp = building_temp_method == BUILDING_TEMP_METHOD_PROG
 
   end function IsProgBuildTemp
-
-  !-----------------------------------------------------------------------
-
+  !----------------------------------------------------------------------
 end module UrbanParamsType
 
 

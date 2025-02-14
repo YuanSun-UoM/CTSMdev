@@ -25,7 +25,6 @@ module clm_initializeMod
   use reweightMod     , only : reweight_wrapup
   use filterMod       , only : allocFilters, filter
   use FatesInterfaceMod, only : set_fates_global_elements
-
   use clm_instMod
   use SoilMoistureStreamMod, only : PrescribedSoilMoistureInit
   ! 
@@ -154,7 +153,8 @@ contains
     ! that will call surfrd_get_special which in turn calls check_urban
 
     call UrbanInput(begg, endg, mode='initialize')
-
+   
+    
     ! Allocate surface grid dynamic memory (just gridcell bounds dependent)
 
     allocate (wt_lunit     (begg:endg, max_lunit           ))
@@ -478,8 +478,6 @@ contains
     if(use_soil_moisture_streams) then 
        call PrescribedSoilMoistureInit(bounds_proc)
     endif
-
-    
 
     ! ------------------------------------------------------------------------
     ! On restart only - process the history namelist. 

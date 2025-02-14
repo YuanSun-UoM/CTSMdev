@@ -36,4 +36,22 @@
 <stream_year_first_urbantv phys="clm4_5" >2000</stream_year_first_urbantv>
 <stream_year_last_urbantv  phys="clm4_5" >2000</stream_year_last_urbantv>
 
+<stream_year_first_urbanalbtvroof phys="clm5_0" >2000</stream_year_first_urbanalbtvroof>
+<stream_year_last_urbanalbtvroof  phys="clm5_0" >2000</stream_year_last_urbanalbtvroof>
+
+<stream_year_first_urbanalbtvroof phys="clm4_5" >2000</stream_year_first_urbanalbtvroof>
+<stream_year_last_urbanalbtvroof  phys="clm4_5" >2000</stream_year_last_urbanalbtvroof>
+
+<stream_year_first_urbanalbtvimproad phys="clm5_0" >2000</stream_year_first_urbanalbtvimproad>
+<stream_year_last_urbanalbtvimproad  phys="clm5_0" >2000</stream_year_last_urbanalbtvimproad>
+
+<stream_year_first_urbanalbtvimproad phys="clm4_5" >2000</stream_year_first_urbanalbtvimproad>
+<stream_year_last_urbanalbtvimproad  phys="clm4_5" >2000</stream_year_last_urbanalbtvimproad>
+
+<stream_year_first_urbanalbtvwall phys="clm5_0" >2000</stream_year_first_urbanalbtvwall>
+<stream_year_last_urbanalbtvwall  phys="clm5_0" >2000</stream_year_last_urbanalbtvwall>
+
+<stream_year_first_urbanalbtvwall phys="clm4_5" >2000</stream_year_first_urbanalbtvwall>
+<stream_year_last_urbanalbtvwall  phys="clm4_5" >2000</stream_year_last_urbanalbtvwall>
+
 </namelist_defaults>
