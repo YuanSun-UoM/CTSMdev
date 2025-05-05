@@ -37,33 +37,35 @@ git remote set-url origin git@github.com:YuanSun-UoM/CTSMdev.git
 
 ### branch management
 
+- check existing branch
+
+```
+git branch
+```
+
 - create branch for model downloaded from CTSM official repo
 
 ```
-git branch
-```
-
-
-
-```
-# create a new branch 
-git checkout -b 5.0.30
+git checkout -b 5.0.30 # CLM version for CESM2.1.3
 git checkout -b 5.2.005
 
 # automatically switched to the new branch '5.0.30'
+
 # upload 'release-clm5.0.30' downloaded from CTSM official repo
+```
 
-# after making changes, push the branch to github
-git push -u origin 'release-clm5.0.30'
+- after making changes, push the branch to github
 
-# push change to the new branch
+```
+git push -u origin '5.0.30'
+```
 
+- delet a branch
+
+```
 # delet a branch
 git switch main
 git branch -d clm5.0.30-transient_urban
-
-# check if deleted
-git branch
 ```
 
 ### tag management
